@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bayan Bank — KSA Core Banking",
-  description: "Modern banking console for wallet transfers, accounts, and settlement tracking",
+  title: "Bayan Bank — Core Banking Platform",
+  description: "Enterprise banking console — transfers, double-entry ledger, settlement tracking, and fraud compliance",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
