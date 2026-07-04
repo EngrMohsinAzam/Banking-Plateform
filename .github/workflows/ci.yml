@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: banking
+          POSTGRES_PASSWORD: banking
+          POSTGRES_DB: banking
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U banking -d banking"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test -count=1 ./...
+
+      - name: Integration tests
+        env:
+          TEST_POSTGRES_DSN: postgres://banking:banking@localhost:5432/banking?sslmode=disable
+          REDIS_ADDR: localhost:6379
+        run: go test -tags=integration -count=1 ./internal/ledger/adapters/postgres/... ./internal/transfer/app/... ./internal/settlement/app/...
+
+      - name: Build binaries
+        run: |
+          go build -o /tmp/api ./cmd/api
+          go build -o /tmp/worker ./cmd/worker
+          go build -o /tmp/migrate ./cmd/migrate

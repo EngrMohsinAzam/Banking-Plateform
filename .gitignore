@@ -1,0 +1,25 @@
+# Binaries
+/bin/
+/dist/
+*.exe
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+coverage.out
+coverage.html
+*.test
+
+# Docker volumes (local overrides)
+docker-compose.override.yml

@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: KSA Core Banking API
+  version: 1.0.0
+  description: Modular monolith banking API — transfers, accounts, saga status.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is up
+
+  /ready:
+    get:
+      summary: Readiness probe (Postgres + Redis)
+      security: []
+      responses:
+        "200":
+          description: Dependencies healthy
+        "503":
+          description: Dependency unavailable
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200":
+          description: Metrics payload
+
+  /openapi.yaml:
+    get:
+      summary: OpenAPI specification
+      security: []
+      responses:
+        "200":
+          description: YAML spec
+
+  /v1/transfers:
+    post:
+      summary: Create a wallet transfer
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferRequest"
+      responses:
+        "201":
+          description: Transfer accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/DomainError"
+        "403":
+          $ref: "#/components/responses/DomainError"
+        "409":
+          $ref: "#/components/responses/DomainError"
+        "422":
+          $ref: "#/components/responses/DomainError"
+
+  /v1/transfers/{transaction_id}:
+    get:
+      summary: Get transfer saga status by journal transaction id
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saga + settlement status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferStatus"
+        "404":
+          $ref: "#/components/responses/DomainError"
+
+  /v1/transfers/by-key/{idempotency_key}:
+    get:
+      summary: Get transfer saga status by idempotency key
+      parameters:
+        - name: idempotency_key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saga + settlement status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferStatus"
+
+  /v1/accounts:
+    post:
+      summary: Create a ledger account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account created
+
+  /v1/accounts/{account_id}/balance:
+    get:
+      summary: Get derived account balance
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+
+  /v1/accounts/{account_id}/entries:
+    get:
+      summary: List journal entries for an account
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Entry list
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Required when AUTH_ENABLED=true
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    DomainError:
+      description: Domain error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    TransferRequest:
+      type: object
+      required: [from_account_id, to_account_id, amount, beneficiary_iban]
+      properties:
+        from_account_id: { type: string }
+        to_account_id: { type: string }
+        amount: { type: string, example: "100.00" }
+        beneficiary_iban: { type: string }
+        beneficiary_name: { type: string }
+        description: { type: string }
+
+    TransferResponse:
+      type: object
+      properties:
+        transaction_id: { type: string }
+        amount: { type: string }
+        from_account_id: { type: string }
+        to_account_id: { type: string }
+        saga_id: { type: string }
+        settlement_id: { type: string }
+        saga_state: { type: string }
+        settlement_status: { type: string }
+        replayed: { type: boolean }
+
+    TransferStatus:
+      type: object
+      properties:
+        saga_id: { type: string }
+        saga_state: { type: string }
+        transaction_id: { type: string }
+        settlement_id: { type: string }
+        settlement_status: { type: string }
+        amount: { type: string }
+
+    CreateAccountRequest:
+      type: object
+      required: [id, name, account_type]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        account_type:
+          type: string
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+
+    BalanceResponse:
+      type: object
+      properties:
+        account_id: { type: string }
+        balance: { type: string }
+        currency: { type: string }
+
+    ErrorBody:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
